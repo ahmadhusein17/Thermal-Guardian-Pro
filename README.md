@@ -100,4 +100,4 @@ Kalau **Thermal Guardian Pro** ngebantu HP kamu jadi lebih adem pas *push rank* 
 - [**💸 Sawer Ngab (Saweria)**](https://saweria.co/ahmadhusein17)
 - [**☕ Traktir Kopi (Trakteer)**](https://trakteer.id/ahmadhusein17)
 - [**🌐 PayPal**](https://paypal.me/ahmadhusein17)
-- 
+- [**💸 QRIS Statis**](https://shp.ee/xcn8mf8v)
