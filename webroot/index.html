@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Thermal Guardian Pro</title>
+<style>
+  :root {
+    --bg: #0A0D0F; --surface: #12171A; --surface-raised: #1A2124; --hairline: #232B2F;
+    --text: #E9EEF0; --text-muted: #7C8A8F;
+    --cool: #35D0C0; --warm: #F2A93B; --hot: #EF5350; --perf: #7C8CFF;
+    --radius: 14px;
+    --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  html[data-theme="light"] {
+    --bg: #F4F6F6; --surface: #FFFFFF; --surface-raised: #EDF1F1; --hairline: #DCE3E3;
+    --text: #10161A; --text-muted: #5C6A6E;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); }
+  body { font-family: var(--sans); padding: 20px 16px 40px; max-width: 520px; margin: 0 auto; }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+  }
+  h1, h2, p { margin: 0; }
+  button { font-family: inherit; cursor: pointer; }
+  button:focus-visible, .toggle-row input:focus-visible, .tab-btn:focus-visible {
+    outline: 2px solid var(--cool); outline-offset: 2px;
+  }
+  /* Deliberately no CSS transitions on layout/paint-heavy properties -
+     the v4.2 freeze/ANR issue traced back to a blocking JS<->native
+     exec bridge plus overlapping poll timers, not to CSS, but every bit
+     of avoidable render work still matters on the low/mid-range devices
+     this module targets. Colors/opacity only, nothing GPU-expensive. */
+
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .brand-mark {
+    width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--cool), var(--perf));
+    display: flex; align-items: center; justify-content: center;
+  }
+  .brand h1 { font-size: 14px; font-weight: 650; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .brand .sub { font-size: 10.5px; color: var(--text-muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .header-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .icon-btn {
+    background: var(--surface); border: 1px solid var(--hairline); border-radius: 10px;
+    width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted); font-size: 10.5px; font-weight: 700;
+  }
+  .icon-btn.spinning { animation: spin .7s linear infinite; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  /* ---- tab bar ---- */
+  .tabbar { display: flex; gap: 6px; margin-bottom: 14px; background: var(--surface); border: 1px solid var(--hairline); border-radius: 12px; padding: 4px; }
+  .tab-btn {
+    flex: 1; background: transparent; border: none; border-radius: 9px; padding: 9px 4px;
+    color: var(--text-muted); font-size: 12.5px; font-weight: 650;
+  }
+  .tab-btn.active { background: var(--surface-raised); color: var(--cool); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ---- toast ---- */
+  .toast {
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(10px);
+    background: var(--surface-raised); border: 1px solid var(--hairline); color: var(--text);
+    font-size: 12.5px; font-weight: 600; padding: 10px 16px; border-radius: 999px;
+    opacity: 0; pointer-events: none; max-width: 88%; text-align: center;
+    box-shadow: 0 6px 20px rgba(0,0,0,.25);
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .card { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+  .card h2 { font-size: 12px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px; }
+
+  /* ---- status: numbers only, no gauge/canvas ---- */
+  .status-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .status-temp { font-family: var(--mono); font-size: 44px; font-weight: 650; line-height: 1; }
+  .status-temp .unit { font-size: 20px; color: var(--text-muted); font-weight: 500; }
+  .status-word { font-size: 13px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; text-align: right; }
+  .status-word.relaxed { color: var(--cool); }
+  .status-word.stock { color: var(--warm); }
+  .status-word.off { color: var(--text-muted); }
+  .status-word .sub { display: block; font-size: 10.5px; font-weight: 500; text-transform: none; color: var(--text-muted); margin-top: 2px; letter-spacing: 0; }
+  .status-meta { font-size: 10.5px; color: var(--text-muted); margin-top: 10px; line-height: 1.6; }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 14px; }
+  .stat-grid.cols3 { grid-template-columns: repeat(3, 1fr); }
+  .stat-chip { background: var(--surface-raised); border: 1px solid var(--hairline); border-radius: 10px; padding: 8px 4px; text-align: center; }
+  .stat-chip .v { font-family: var(--mono); font-size: 15px; font-weight: 600; }
+  .stat-chip .l { font-size: 9px; color: var(--text-muted); margin-top: 2px; text-transform: uppercase; letter-spacing: .03em; }
+
+  .profile-badge {
+    margin-top: 12px; font-size: 12px; color: var(--perf); background: rgba(124,140,255,.12);
+    border: 1px solid rgba(124,140,255,.3); border-radius: 999px; padding: 5px 12px; display: none; align-items: center; gap: 6px;
+  }
+
+  .force-row { display: flex; gap: 8px; margin-top: 12px; }
+  .force-btn {
+    flex: 1; background: var(--surface-raised); border: 1px solid var(--hairline); color: var(--text);
+    border-radius: 10px; padding: 10px 8px; font-size: 12px; font-weight: 600; text-align: center;
+  }
+  .force-btn.relax { color: var(--cool); }
+  .force-btn.restore { color: var(--warm); }
+  .force-btn:disabled { opacity: .5; }
+
+  /* ---- master toggle ---- */
+  .master-row { display: flex; align-items: center; justify-content: space-between; }
+  .master-row .desc { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+  .switch { position: relative; width: 46px; height: 26px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider-track { position: absolute; inset: 0; background: var(--hairline); border-radius: 999px; cursor: pointer; }
+  .slider-knob { position: absolute; width: 20px; height: 20px; left: 3px; top: 3px; background: #fff; border-radius: 999px; }
+  .switch input:checked + .slider-track { background: var(--cool); }
+  .switch input:checked + .slider-track .slider-knob { transform: translateX(20px); }
+  .switch.sm { width: 40px; height: 24px; }
+  .switch.sm .slider-knob { width: 18px; height: 18px; }
+  .switch.sm input:checked + .slider-track .slider-knob { transform: translateX(16px); }
+
+  /* ---- mini event preview on Status tab ---- */
+  .mini-events { margin-top: 10px; }
+  .mini-events .row { font-size: 11px; font-family: var(--mono); color: var(--text-muted); padding: 5px 0; border-top: 1px solid var(--hairline); }
+  .mini-events .row:first-child { border-top: none; }
+  .mini-events .link { display: inline-block; margin-top: 8px; font-size: 11.5px; color: var(--cool); font-weight: 650; background: none; border: none; padding: 0; }
+
+  /* ---- default-mode select (advanced) ---- */
+  .default-mode-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 10px; }
+  .default-mode-row .name { font-size: 13px; font-weight: 550; }
+  .default-mode-row .desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .custom-slider { margin-top: 10px; display: none; }
+  .custom-slider.show { display: block; }
+  .custom-slider input[type=range] { width: 100%; accent-color: var(--cool); }
+  .custom-slider .val { font-family: var(--mono); font-size: 12px; color: var(--text-muted); text-align: right; }
+
+  /* ---- advanced ---- */
+  details.card { padding: 0; }
+  details.card summary { list-style: none; cursor: pointer; padding: 16px; display: flex; align-items: center; justify-content: space-between; }
+  details.card summary::-webkit-details-marker { display: none; }
+  details.card summary h2 { margin-bottom: 0; }
+  details.card summary .chev { color: var(--text-muted); font-size: 12px; }
+  details.card[open] summary .chev { transform: rotate(180deg); }
+  .details-body { padding: 0 16px 16px; }
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--hairline); gap: 12px; }
+  .toggle-row:first-child { border-top: none; }
+  .toggle-row .name { font-size: 13px; font-weight: 550; }
+  .toggle-row .desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .toggle-row.risky .name { color: var(--hot); }
+  .poll-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--hairline); }
+  select {
+    background: var(--surface); color: var(--text); border: 1px solid var(--hairline); border-radius: 8px;
+    padding: 6px 8px; font-size: 12px; font-family: var(--mono);
+  }
+
+  /* ---- device info ---- */
+  .info-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 7px 0; border-top: 1px solid var(--hairline); }
+  .info-row:first-child { border-top: none; }
+  .info-row .k { font-size: 12px; color: var(--text-muted); flex-shrink: 0; }
+  .info-row .v { font-size: 12px; font-family: var(--mono); text-align: right; word-break: break-all; }
+
+  /* ---- profiles ---- */
+  .profile-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .profile-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--surface-raised); border: 1px solid var(--hairline); border-radius: 8px; padding: 8px 10px; }
+  .profile-item .pkg { font-family: var(--mono); font-size: 11px; word-break: break-all; }
+  .profile-item .mode-tag { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--perf); flex-shrink: 0; }
+  .profile-item .rm { background: none; border: none; color: var(--text-muted); font-size: 16px; line-height: 1; flex-shrink: 0; padding: 2px 4px; }
+  .profile-empty { font-size: 12px; color: var(--text-muted); text-align: center; padding: 10px 0; }
+  .add-profile { display: flex; gap: 6px; }
+  .add-profile input[type=text] {
+    flex: 1; min-width: 0; background: var(--surface-raised); border: 1px solid var(--hairline); color: var(--text);
+    border-radius: 8px; padding: 8px 10px; font-size: 12px; font-family: var(--mono);
+  }
+  .add-profile button { background: var(--cool); color: #06201C; border: none; border-radius: 8px; padding: 8px 14px; font-size: 12px; font-weight: 650; flex-shrink: 0; }
+
+  /* ---- game picker ---- */
+  .picker-hint { font-size: 11px; color: var(--text-muted); margin-bottom: 10px; line-height: 1.5; }
+  .picker-load-btn { width: 100%; background: var(--surface-raised); border: 1px solid var(--hairline); color: var(--text); border-radius: 10px; padding: 10px; font-size: 12.5px; font-weight: 650; }
+  .picker-search { width: 100%; background: var(--surface-raised); border: 1px solid var(--hairline); color: var(--text); border-radius: 8px; padding: 8px 10px; font-size: 12px; margin-bottom: 8px; }
+  .picker-list { display: flex; flex-direction: column; gap: 6px; max-height: 360px; overflow-y: auto; }
+  .app-row { display: flex; align-items: center; gap: 8px; background: var(--surface-raised); border: 1px solid var(--hairline); border-radius: 8px; padding: 6px 8px; }
+  .app-avatar { width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0; object-fit: cover; background: var(--hairline); }
+  .app-avatar-fallback { width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0; background: var(--hairline); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--text-muted); }
+  .app-meta { flex: 1; min-width: 0; }
+  .app-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .app-pkg { font-size: 10px; font-family: var(--mono); color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .app-badge { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--cool); background: rgba(53,208,192,.12); border-radius: 5px; padding: 2px 5px; margin-left: 6px; flex-shrink: 0; }
+  .app-add { background: var(--cool); color: #06201C; border: none; border-radius: 7px; font-size: 16px; font-weight: 700; width: 26px; height: 26px; flex-shrink: 0; line-height: 1; }
+  .app-added { font-size: 10px; color: var(--text-muted); flex-shrink: 0; padding: 0 4px; }
+  .picker-empty { font-size: 12px; color: var(--text-muted); text-align: center; padding: 14px 0; }
+
+  /* ---- events ---- */
+  .event-list { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
+  .event-item { font-size: 11px; font-family: var(--mono); color: var(--text-muted); padding: 6px 8px; border-radius: 6px; background: var(--surface-raised); }
+  .event-empty { font-size: 12px; color: var(--text-muted); text-align: center; padding: 10px 0; }
+
+  .diag-line { font-size: 11px; font-family: var(--mono); line-height: 1.9; color: var(--text-muted); word-break: break-all; }
+  .diag-btn { background: var(--surface-raised); border: 1px solid var(--hairline); color: var(--text); border-radius: 8px; padding: 8px 14px; font-size: 12px; }
+  .diag-pre { display: none; margin-top: 10px; font-size: 10px; font-family: var(--mono); color: var(--text-muted); white-space: pre-wrap; word-break: break-all; background: var(--surface-raised); border: 1px solid var(--hairline); border-radius: 8px; padding: 10px; max-height: 260px; overflow-y: auto; }
+
+  footer { margin-top: 6px; padding: 14px 4px 0; font-size: 11px; line-height: 1.6; color: var(--text-muted); text-align: center; }
+  footer .warn { color: var(--warm); margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-mark">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#06201C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2 L20 6 V12 C20 17 16.4 20.7 12 22 C7.6 20.7 4 17 4 12 V6 Z"></path>
+        <path d="M9.5 12.5 L11.3 14.3 L15 10"></path>
+      </svg>
+    </div>
+    <div style="min-width:0;">
+      <h1 data-i18n="app_name">Thermal Guardian Pro</h1>
+      <div class="sub" id="chipsetLine">-</div>
+    </div>
+  </div>
+  <div class="header-actions">
+    <button class="icon-btn" id="refreshBtn" title="Refresh">⟳</button>
+    <button class="icon-btn" id="langBtn" title="Language">ID</button>
+    <button class="icon-btn" id="themeBtn" title="Theme">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="4"></circle>
+        <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<div class="tabbar" role="tablist">
+  <button class="tab-btn active" data-tab="status" data-i18n="tab_status">Status</button>
+  <button class="tab-btn" data-tab="game" data-i18n="tab_game">Game</button>
+  <button class="tab-btn" data-tab="lainnya" data-i18n="tab_more">Lainnya</button>
+</div>
+
+<!-- ================= TAB: STATUS ================= -->
+<div class="tab-panel active" id="panel-status">
+
+  <div class="card">
+    <div class="status-row">
+      <div class="status-temp"><span id="tempVal">--</span><span class="unit">°C</span></div>
+      <div class="status-word off" id="statusWord">
+        <span id="statusText" data-i18n="loading">Memuat...</span>
+        <span class="sub" id="statusSub"></span>
+      </div>
+    </div>
+    <div class="status-meta" id="statusMeta">-</div>
+    <div class="stat-grid">
+      <div class="stat-chip"><div class="v" id="battTemp">--°</div><div class="l" data-i18n="battery">Baterai</div></div>
+      <div class="stat-chip"><div class="v" id="safeTemp">--°</div><div class="l" data-i18n="safe_limit">Batas Aman</div></div>
+      <div class="stat-chip"><div class="v" id="hardTemp">58°</div><div class="l" data-i18n="hard_ceiling">Batas Keras</div></div>
+      <div class="stat-chip"><div class="v" id="relaxedPct">--%</div><div class="l" data-i18n="relaxed_pct">Longgar/1j</div></div>
+    </div>
+    <div class="profile-badge" id="profileBadge">
+      <span data-i18n="profile_active">Profil aktif:</span>&nbsp;<span id="profileName"></span>
+    </div>
+    <div class="force-row">
+      <button class="force-btn relax" id="forceRelaxBtn" data-i18n="force_relax">Paksa Longgar</button>
+      <button class="force-btn restore" id="forceRestoreBtn" data-i18n="force_restore">Paksa Stok</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="master-row">
+      <div>
+        <h2 style="margin-bottom:2px;" data-i18n="guardian_master">Guardian Aktif</h2>
+        <div class="desc" data-i18n="guardian_master_desc">Matikan untuk kembali 100% ke pengaturan pabrik</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="masterToggle">
+        <span class="slider-track"><span class="slider-knob"></span></span>
+      </label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 data-i18n="events">Log Kejadian</h2>
+    <div class="mini-events" id="eventListMini"><div class="event-empty" data-i18n="loading">Memuat...</div></div>
+    <button class="mini-events link" id="viewAllEventsBtn" data-i18n="view_all_events">Lihat semua log →</button>
+  </div>
+
+</div>
+
+<!-- ================= TAB: GAME ================= -->
+<div class="tab-panel" id="panel-game">
+
+  <div class="card">
+    <h2 data-i18n="auto_mode_title">Mode Otomatis</h2>
+    <div class="picker-hint" data-i18n="auto_mode_desc">Tidak perlu pilih mode manual. Profil di bawah otomatis pindah ke mode masing-masing saat aplikasinya berjalan, dan kembali ke default begitu ditutup. Aplikasi yang belum diprofilkan pun bisa ikut terdeteksi lewat "Deteksi game otomatis" di tab Lainnya → Toggle Lanjutan.</div>
+  </div>
+
+  <div class="card">
+    <h2 data-i18n="profiles">Profil Per-Aplikasi</h2>
+    <div class="profile-list" id="profileList"></div>
+    <div class="add-profile">
+      <input type="text" id="profilePkgInput" placeholder="com.contoh.game">
+      <select id="profileModeSelect">
+        <option value="eco">Eco</option>
+        <option value="balanced" selected>Balanced</option>
+        <option value="performance">Performance</option>
+        <option value="custom">Custom</option>
+      </select>
+      <button id="profileAddBtn" data-i18n="add">Tambah</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 data-i18n="picker_title">Tambah dari Aplikasi Terpasang</h2>
+    <div class="picker-hint" data-i18n="picker_hint">Aplikasi bertanda "GAME" dikenali dari daftar bawaan modul - ini cuma bantuan urutan, bukan syarat. Ditambahkan otomatis dengan mode Performance; ubah mode lewat form di atas kalau perlu.</div>
+    <button class="picker-load-btn" id="pickerLoadBtn" data-i18n="picker_load">Muat Daftar Aplikasi</button>
+    <input type="text" class="picker-search" id="pickerSearch" placeholder="Cari aplikasi..." style="display:none;">
+    <div class="picker-list" id="pickerList" style="display:none;"></div>
+  </div>
+
+</div>
+
+<!-- ================= TAB: LAINNYA ================= -->
+<div class="tab-panel" id="panel-lainnya">
+
+  <div class="card">
+    <h2 data-i18n="device_title">Perangkat</h2>
+    <div id="deviceInfoBody">
+      <div class="info-row"><span class="k" data-i18n="device_model">Model</span><span class="v" id="devModel">-</span></div>
+      <div class="info-row"><span class="k" data-i18n="device_chipset">Chipset</span><span class="v" id="devChipset">-</span></div>
+      <div class="info-row"><span class="k" data-i18n="device_android">Android</span><span class="v" id="devAndroid">-</span></div>
+      <div class="info-row"><span class="k" data-i18n="device_kernel">Kernel</span><span class="v" id="devKernel">-</span></div>
+      <div class="info-row"><span class="k" data-i18n="device_root">Root</span><span class="v" id="devRoot">-</span></div>
+      <div class="info-row"><span class="k" data-i18n="device_module_ver">Versi Modul</span><span class="v" id="devModuleVer">-</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 data-i18n="stats1h">Statistik 1 Jam</h2>
+    <div class="stat-grid cols3">
+      <div class="stat-chip"><div class="v" id="histMin">--°</div><div class="l" data-i18n="hist_min">Terendah/1j</div></div>
+      <div class="stat-chip"><div class="v" id="histAvg">--°</div><div class="l" data-i18n="hist_avg">Rata2/1j</div></div>
+      <div class="stat-chip"><div class="v" id="histMax">--°</div><div class="l" data-i18n="hist_max">Tertinggi/1j</div></div>
+    </div>
+  </div>
+
+  <details class="card" id="advancedDetails" open>
+    <summary><h2 data-i18n="advanced">Toggle Lanjutan</h2><span class="chev">▾</span></summary>
+    <div class="details-body">
+      <div class="default-mode-row">
+        <div>
+          <div class="name" data-i18n="default_mode_label">Mode default (tanpa game aktif)</div>
+          <div class="desc" data-i18n="default_mode_desc">Dipakai saat tidak ada profil aplikasi yang sedang berjalan</div>
+        </div>
+        <select id="defaultModeSelect">
+          <option value="eco" data-i18n="mode_eco">Eco</option>
+          <option value="balanced" data-i18n="mode_balanced">Balanced</option>
+          <option value="performance" data-i18n="mode_performance">Performance</option>
+          <option value="custom" data-i18n="mode_custom">Custom</option>
+        </select>
+      </div>
+      <div class="custom-slider" id="customSliderWrap">
+        <input type="range" id="customSlider" min="40" max="54" value="47">
+        <div class="val"><span id="customSliderVal">47</span>°C</div>
+      </div>
+      <div class="toggle-row" style="border-top:1px solid var(--hairline); margin-top:4px; padding-top:14px;">
+        <div><div class="name" data-i18n="t_autodetect">Deteksi game otomatis (heuristik)</div><div class="desc" data-i18n="t_autodetect_desc">Aplikasi asing yang lama di depan layar + suhu naik dianggap game, tanpa perlu ditambah manual. Bukan AI/ML sungguhan - cuma dua sinyal sederhana.</div></div>
+        <label class="switch sm"><input type="checkbox" id="tAutoDetect"><span class="slider-track"><span class="slider-knob"></span></span></label>
+      </div>
+      <div class="toggle-row">
+        <div><div class="name" data-i18n="t_autodiscover">Auto-discover daemon thermal</div><div class="desc" data-i18n="t_autodiscover_desc">Cari & hentikan daemon thermal OEM lain di luar daftar bawaan modul, agar lebih universal lintas merek.</div></div>
+        <label class="switch sm"><input type="checkbox" id="tAutoDiscover"><span class="slider-track"><span class="slider-knob"></span></span></label>
+      </div>
+      <div class="toggle-row">
+        <div><div class="name" data-i18n="t_engine">Hentikan daemon thermal-engine</div><div class="desc" data-i18n="t_engine_desc">Inti dari mode relaxed. Dipulihkan otomatis.</div></div>
+        <label class="switch sm"><input type="checkbox" id="tEngine"><span class="slider-track"><span class="slider-knob"></span></span></label>
+      </div>
+      <div class="toggle-row">
+        <div><div class="name" data-i18n="t_sched">Nonaktifkan sched_boost</div><div class="desc" data-i18n="t_sched_desc">Boost CPU scheduler saat relaxed</div></div>
+        <label class="switch sm"><input type="checkbox" id="tSched"><span class="slider-track"><span class="slider-knob"></span></span></label>
+      </div>
+      <div class="toggle-row">
+        <div><div class="name" data-i18n="t_iostats">Nonaktifkan I/O stats</div><div class="desc" data-i18n="t_iostats_desc">Kurangi overhead I/O storage saat relaxed</div></div>
+        <label class="switch sm"><input type="checkbox" id="tIostats"><span class="slider-track"><span class="slider-knob"></span></span></label>
+      </div>
+      <div class="toggle-row">
+        <div><div class="name" data-i18n="t_dfps">Nonaktifkan Smart DFPS</div><div class="desc" data-i18n="t_dfps_desc">Butuh reboot untuk berlaku</div></div>
+        <label class="switch sm"><input type="checkbox" id="tDfps"><span class="slider-track"><span class="slider-knob"></span></span></label>
+      </div>
+      <div class="toggle-row risky">
+        <div><div class="name" data-i18n="t_gpu">GPU power limiter (agresif)</div><div class="desc" data-i18n="t_gpu_desc">GPU panas lebih cepat dari CPU. Gunakan hati-hati.</div></div>
+        <label class="switch sm"><input type="checkbox" id="tGpu"><span class="slider-track"><span class="slider-knob"></span></span></label>
+      </div>
+      <div class="toggle-row risky">
+        <div><div class="name" data-i18n="t_lmh">PPM / LMh limiter (agresif)</div><div class="desc" data-i18n="t_lmh_desc">Debugfs power limiter tingkat rendah</div></div>
+        <label class="switch sm"><input type="checkbox" id="tLmh"><span class="slider-track"><span class="slider-knob"></span></span></label>
+      </div>
+      <div class="poll-row">
+        <div class="name" data-i18n="t_poll">Interval polling</div>
+        <select id="pollSelect">
+          <option value="6">6s</option>
+          <option value="10">10s</option>
+          <option value="20">20s</option>
+          <option value="manual" data-i18n="poll_manual">Manual</option>
+        </select>
+      </div>
+    </div>
+  </details>
+
+  <div class="card">
+    <h2 data-i18n="events">Log Kejadian</h2>
+    <div class="event-list" id="eventListFull"><div class="event-empty" data-i18n="loading">Memuat...</div></div>
+  </div>
+
+  <details class="card" id="diagDetails">
+    <summary><h2 data-i18n="diag">Diagnostik</h2><span class="chev">▾</span></summary>
+    <div class="details-body">
+      <div class="diag-line" id="diagBody">-</div>
+      <div style="display:flex; gap:8px; margin-top:10px;">
+        <button class="diag-btn" id="diagTestBtn" data-i18n="diag_test">Tes Bridge</button>
+        <button class="diag-btn" id="diagDaemonBtn" data-i18n="diag_daemon">Cek Daemon</button>
+      </div>
+      <pre class="diag-pre" id="diagRaw"></pre>
+    </div>
+  </details>
+
+</div>
+
+<footer>
+  <div data-i18n="footer_data">Data & konfigurasi disimpan di /data/adb/thermal_guardian_pro/, tidak hilang saat modul diupdate.</div>
+  <div class="warn" data-i18n="footer_warn">Melonggarkan limit thermal meningkatkan risiko perangkat lebih panas dan mempercepat penuaan baterai. Batas keras tidak bisa dimatikan, tapi gunakan mode Performance/Custom secukupnya.</div>
+</footer>
+
+<div class="toast" id="toastEl"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  var MODPATH = "/data/adb/modules/thermal_guardian_pro";
+  try {
+    if (window.ksu && typeof window.ksu.moduleInfo === "function") {
+      var info = JSON.parse(window.ksu.moduleInfo());
+      if (info && info.moduleDir) MODPATH = info.moduleDir;
+    }
+  } catch (e) { /* keep the hardcoded default */ }
+  var BRIDGE = "sh " + MODPATH + "/webui_bridge.sh";
+
+  var I18N = {
+    id: {
+      app_name: "Thermal Guardian Pro", loading: "Memuat...",
+      battery: "Baterai", safe_limit: "Batas Aman", hard_ceiling: "Batas Keras", relaxed_pct: "Longgar/1j",
+      hist_min: "Terendah/1j", hist_avg: "Rata2/1j", hist_max: "Tertinggi/1j",
+      profile_active: "Profil aktif:",
+      force_relax: "Paksa Longgar", force_restore: "Paksa Stok",
+      guardian_master: "Guardian Aktif", guardian_master_desc: "Matikan untuk kembali 100% ke pengaturan pabrik",
+      tab_status: "Status", tab_game: "Game", tab_more: "Lainnya",
+      auto_mode_title: "Mode Otomatis",
+      auto_mode_desc: "Tidak perlu pilih mode manual. Profil di bawah otomatis pindah ke mode masing-masing saat aplikasinya berjalan, dan kembali ke default begitu ditutup. Aplikasi yang belum diprofilkan pun bisa ikut terdeteksi lewat \"Deteksi game otomatis\" di tab Lainnya → Toggle Lanjutan.",
+      mode_eco: "Eco", mode_balanced: "Balanced", mode_performance: "Performance", mode_custom: "Custom",
+      default_mode_label: "Mode default (tanpa game aktif)", default_mode_desc: "Dipakai saat tidak ada profil aplikasi yang sedang berjalan",
+      advanced: "Toggle Lanjutan",
+      t_engine: "Hentikan daemon thermal-engine", t_engine_desc: "Inti dari mode relaxed. Dipulihkan otomatis.",
+      t_autodetect: "Deteksi game otomatis (heuristik)", t_autodetect_desc: "Aplikasi asing yang lama di depan layar + suhu naik dianggap game, tanpa perlu ditambah manual. Bukan AI/ML sungguhan - cuma dua sinyal sederhana.",
+      t_autodiscover: "Auto-discover daemon thermal", t_autodiscover_desc: "Cari & hentikan daemon thermal OEM lain di luar daftar bawaan modul, agar lebih universal lintas merek.",
+      t_sched: "Nonaktifkan sched_boost", t_sched_desc: "Boost CPU scheduler saat relaxed",
+      t_iostats: "Nonaktifkan I/O stats", t_iostats_desc: "Kurangi overhead I/O storage saat relaxed",
+      t_dfps: "Nonaktifkan Smart DFPS", t_dfps_desc: "Butuh reboot untuk berlaku",
+      t_gpu: "GPU power limiter (agresif)", t_gpu_desc: "GPU panas lebih cepat dari CPU. Gunakan hati-hati.",
+      t_lmh: "PPM / LMh limiter (agresif)", t_lmh_desc: "Debugfs power limiter tingkat rendah",
+      t_poll: "Interval polling", poll_manual: "Manual",
+      profiles: "Profil Per-Aplikasi", add: "Tambah",
+      picker_title: "Tambah dari Aplikasi Terpasang",
+      picker_hint: "Aplikasi bertanda \"GAME\" dikenali dari daftar bawaan modul - ini cuma bantuan urutan, bukan syarat. Ditambahkan otomatis dengan mode Performance; ubah mode lewat form di atas kalau perlu.",
+      picker_load: "Muat Daftar Aplikasi", picker_loading: "Memuat daftar aplikasi...",
+      picker_empty: "Tidak ada aplikasi ditemukan.", picker_added: "Ditambahkan",
+      events: "Log Kejadian", view_all_events: "Lihat semua log →",
+      device_title: "Perangkat", device_model: "Model", device_chipset: "Chipset", device_android: "Android",
+      device_kernel: "Kernel", device_root: "Root", device_module_ver: "Versi Modul",
+      stats1h: "Statistik 1 Jam",
+      diag: "Diagnostik", diag_test: "Tes Bridge", diag_daemon: "Cek Daemon",
+      footer_data: "Data & konfigurasi disimpan di /data/adb/thermal_guardian_pro/, tidak hilang saat modul diupdate.",
+      footer_warn: "Melonggarkan limit thermal meningkatkan risiko perangkat lebih panas dan mempercepat penuaan baterai. Batas keras tidak bisa dimatikan, tapi gunakan mode Performance/Custom secukupnya.",
+      state_relaxed: "Dilonggarkan", state_stock: "Proteksi Stok", state_off: "Guardian Nonaktif",
+      profile_empty: "Belum ada profil aplikasi.", event_empty: "Belum ada kejadian tercatat.",
+      applying: "menerapkan...", manual_hint: "Mode manual - tekan ⟳ untuk refresh",
+      toast_refreshing: "Menyegarkan...", toast_refreshed: "Diperbarui", toast_refresh_failed: "Gagal, coba lagi"
+    },
+    en: {
+      app_name: "Thermal Guardian Pro", loading: "Loading...",
+      battery: "Battery", safe_limit: "Safe Limit", hard_ceiling: "Hard Ceiling", relaxed_pct: "Relaxed/1h",
+      hist_min: "Lowest/1h", hist_avg: "Avg/1h", hist_max: "Highest/1h",
+      profile_active: "Active profile:",
+      force_relax: "Force Relax", force_restore: "Force Stock",
+      guardian_master: "Guardian Active", guardian_master_desc: "Turn off to fully restore factory settings",
+      tab_status: "Status", tab_game: "Game", tab_more: "More",
+      auto_mode_title: "Automatic Mode",
+      auto_mode_desc: "No manual mode picking needed. Profiles below switch to their own mode automatically while their app is running, and revert to the default once it closes. Apps you haven't profiled can still get picked up via \"Auto-detect games\" in the More tab → Advanced Toggles.",
+      mode_eco: "Eco", mode_balanced: "Balanced", mode_performance: "Performance", mode_custom: "Custom",
+      default_mode_label: "Default mode (no active game)", default_mode_desc: "Used whenever no app profile is currently running",
+      advanced: "Advanced Toggles",
+      t_engine: "Stop thermal-engine daemon", t_engine_desc: "Core of relaxed mode. Restored automatically.",
+      t_autodetect: "Auto-detect games (heuristic)", t_autodetect_desc: "A third-party app that's stayed in the foreground while temperature climbs gets treated as a game, no manual add needed. Not real AI/ML - just two simple signals.",
+      t_autodiscover: "Auto-discover thermal daemons", t_autodiscover_desc: "Look for and stop other OEM thermal daemons beyond the module's built-in list, for broader cross-brand coverage.",
+      t_sched: "Disable sched_boost", t_sched_desc: "CPU scheduler boost while relaxed",
+      t_iostats: "Disable I/O stats", t_iostats_desc: "Reduce storage I/O overhead while relaxed",
+      t_dfps: "Disable Smart DFPS", t_dfps_desc: "Requires reboot to take effect",
+      t_gpu: "GPU power limiter (aggressive)", t_gpu_desc: "GPU heats up faster than the CPU. Use with care.",
+      t_lmh: "PPM / LMh limiter (aggressive)", t_lmh_desc: "Low-level debugfs power limiter",
+      t_poll: "Polling interval", poll_manual: "Manual",
+      profiles: "Per-App Profiles", add: "Add",
+      picker_title: "Add from Installed Apps",
+      picker_hint: "Apps tagged \"GAME\" are matched against a small bundled list - just a sort hint, not a requirement. Added with Performance mode by default; change it via the form above if needed.",
+      picker_load: "Load App List", picker_loading: "Loading app list...",
+      picker_empty: "No apps found.", picker_added: "Added",
+      events: "Event Log", view_all_events: "View full log →",
+      device_title: "Device", device_model: "Model", device_chipset: "Chipset", device_android: "Android",
+      device_kernel: "Kernel", device_root: "Root", device_module_ver: "Module Version",
+      stats1h: "1-Hour Stats",
+      diag: "Diagnostics", diag_test: "Test Bridge", diag_daemon: "Check Daemon",
+      footer_data: "Data & config are stored in /data/adb/thermal_guardian_pro/, so they survive module updates.",
+      footer_warn: "Relaxing thermal limits raises the risk of a hotter device and faster battery aging. The hard ceiling can't be disabled, but use Performance/Custom modes in moderation.",
+      state_relaxed: "Relaxed", state_stock: "Stock Protection", state_off: "Guardian Off",
+      profile_empty: "No app profiles yet.", event_empty: "No events logged yet.",
+      applying: "applying...", manual_hint: "Manual mode - tap ⟳ to refresh",
+      toast_refreshing: "Refreshing...", toast_refreshed: "Updated", toast_refresh_failed: "Failed, try again"
+    }
+  };
+  var lang = "id";
+  function t(key) { return (I18N[lang] && I18N[lang][key]) || key; }
+  function applyLang() {
+    document.querySelectorAll("[data-i18n]").forEach(function (el) { el.textContent = t(el.getAttribute("data-i18n")); });
+    document.getElementById("langBtn").textContent = lang.toUpperCase();
+    document.documentElement.lang = lang;
+  }
+
+  // ---------- toast (refresh feedback etc.) ----------
+  var _toastTimer = null;
+  function showToast(msg) {
+    var native = false;
+    try { if (window.ksu && typeof window.ksu.toast === "function") { window.ksu.toast(msg); native = true; } } catch (e) { /* no native toast */ }
+    var el = document.getElementById("toastEl");
+    el.textContent = msg;
+    el.classList.add("show");
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(function () { el.classList.remove("show"); }, native ? 1200 : 2200);
+  }
+
+  // ---------- tabs ----------
+  document.querySelectorAll(".tab-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var name = btn.getAttribute("data-tab");
+      document.querySelectorAll(".tab-btn").forEach(function (b) { b.classList.toggle("active", b === btn); });
+      document.querySelectorAll(".tab-panel").forEach(function (p) { p.classList.toggle("active", p.id === "panel-" + name); });
+      if (name === "lainnya") loadDeviceInfo();
+    });
+  });
+  document.getElementById("viewAllEventsBtn").addEventListener("click", function () {
+    document.querySelector('.tab-btn[data-tab="lainnya"]').click();
+  });
+
+  // =====================================================================
+  // Root exec bridge
+  //
+  // Root cause of the v4.2 freeze/ANR: FOUR independent setInterval loops
+  // (status/events/history/profiles) with no shared lock, each capable of
+  // issuing a blocking call (some managers implement ksu.exec(cmd) as a
+  // genuinely synchronous JavascriptInterface call that blocks the WebView
+  // JS thread until the shell command returns). At their common multiple
+  // those four timers collided, so 4-5 blocking calls could stack back to
+  // back on the same tap or the same tick - long enough to trip Android's
+  // "page unresponsive" watchdog. Every button handler then chained a
+  // SECOND blocking call (its own "set" + a follow-up "status") on top.
+  //
+  // Fix here is entirely architectural (unchanged in v6):
+  //  - ONE consolidated backend command per cycle (webui_bridge.sh "poll"
+  //    returns status+events+profiles together - see cmd_poll).
+  //  - ONE serialized call queue - a call never starts while another is
+  //    still in flight, whether it came from the timer or from a tap.
+  //  - button actions use "apply" (set + poll in the same shell
+  //    invocation) instead of two separate round trips.
+  //  - self-rescheduling setTimeout, not setInterval, so cycles can never
+  //    pile up if a round trip runs long.
+  //  - adaptive backoff: if a round trip is slow, the next delay grows;
+  //    if calls are consistently fast, it eases back toward the base
+  //    interval.
+  //  - polling pauses while the page is hidden.
+  //  - device info / installed-app list are NEVER part of this loop -
+  //    they're fetched once on demand (tab open / picker button), since
+  //    none of that data changes while the phone is running.
+  var _cbSeq = 0;
+  function execRaw(cmd, cb) {
+    try {
+      if (window.ksu && typeof window.ksu.exec === "function") {
+        var sync = window.ksu.exec(cmd);
+        if (typeof sync === "string") { cb(sync); return; }
+      }
+    } catch (e) { /* this host doesn't support the sync form - fall through */ }
+
+    var done = false;
+    var name = "__tgp_cb_" + (_cbSeq++) + "_" + Date.now();
+    function cleanup() { try { delete window[name]; } catch (e) { window[name] = undefined; } }
+    function finish(out) { if (done) return; done = true; clearTimeout(timer); cleanup(); cb(out); }
+    var timer = setTimeout(function () { finish(null); }, 6000);
+    window[name] = function (errno, stdout) { finish(stdout || ""); };
+    try {
+      if (window.ksu && typeof window.ksu.exec === "function") { window.ksu.exec(cmd, "{}", name); return; }
+      if (typeof window.exec === "function") { window.exec(cmd, "{}", name); return; }
+    } catch (e) { finish(null); return; }
+    finish(null);
+  }
+
+  // Serial queue: every bridge call, no matter where it comes from, goes
+  // through here. Nothing new starts until the previous one has resolved.
+  var _queue = Promise.resolve();
+  var lastRoundTripMs = 0;
+  var DIAG = { ksuPresent: !!(window.ksu && typeof window.ksu.exec === "function"), lastNote: "belum dites", lastMs: 0 };
+
+  function call(args) {
+    return new Promise(function (resolve) {
+      _queue = _queue.then(function () {
+        return new Promise(function (resolveInner) {
+          var startedAt = Date.now();
+          execRaw(BRIDGE + " " + args, function (out) {
+            lastRoundTripMs = Date.now() - startedAt;
+            DIAG.lastMs = lastRoundTripMs;
+            DIAG.bridgeOk = !!out;
+            DIAG.lastNote = out ? ("OK, " + lastRoundTripMs + "ms") : ("gagal/timeout, " + lastRoundTripMs + "ms");
+            resolve(out);
+            resolveInner();
+          });
+        });
+      });
+    });
+  }
+  function safeJSON(str) { try { return JSON.parse(str); } catch (e) { return null; } }
+
+  // ---------- adaptive poll scheduling ----------
+  var baseIntervalMs = 6000;
+  var backoff = 1;
+  var pollTimer = null;
+  var manualMode = false;
+
+  function nextDelay() {
+    if (lastRoundTripMs > 1500) backoff = Math.min(backoff * 1.6, 5);
+    else if (lastRoundTripMs < 400) backoff = Math.max(backoff * 0.85, 1);
+    return Math.min(baseIntervalMs * backoff, 30000);
+  }
+
+  function scheduleNext() {
+    if (manualMode || document.hidden) return;
+    clearTimeout(pollTimer);
+    pollTimer = setTimeout(pollCycle, nextDelay());
+  }
+
+  function pollCycle(doneCb) {
+    call("poll").then(function (out) {
+      var data = safeJSON(out);
+      if (data) renderAll(data);
+      else {
+        document.getElementById("statusWord").className = "status-word off";
+        document.getElementById("statusText").textContent = lang === "id" ? "Bridge tidak merespons" : "Bridge not responding";
+      }
+      scheduleNext();
+      if (doneCb) doneCb(!!data);
+    });
+  }
+
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) scheduleNext();
+  });
+
+  // ---------- rendering (numbers only) ----------
+  var draggingSlider = false;
+  var latestProfiles = [];
+
+  function renderAll(data) {
+    renderStatus(data.status);
+    renderEvents(data.events);
+    renderProfiles(data.profiles);
+  }
+
+  function renderStatus(s) {
+    if (!s) return;
+    var gov = s.governing_c, hard = s.hard_max || 58, safe = s.safe_temp || 47;
+    document.getElementById("tempVal").textContent = gov;
+    document.getElementById("battTemp").textContent = (s.battery_c === null || s.battery_c === undefined) ? "--°" : s.battery_c + "°";
+    document.getElementById("safeTemp").textContent = safe + "°";
+    document.getElementById("hardTemp").textContent = hard + "°";
+    document.getElementById("relaxedPct").textContent = (s.hist_relaxed_pct || 0) + "%";
+    document.getElementById("histMin").textContent = (s.hist_min || 0) + "°";
+    document.getElementById("histAvg").textContent = (s.hist_avg || 0) + "°";
+    document.getElementById("histMax").textContent = (s.hist_max || 0) + "°";
+
+    var word = document.getElementById("statusWord");
+    var text = document.getElementById("statusText");
+    var sub = document.getElementById("statusSub");
+    if (!s.guardian_enabled) { word.className = "status-word off"; text.textContent = t("state_off"); }
+    else if (s.state === "relaxed") { word.className = "status-word relaxed"; text.textContent = t("state_relaxed"); }
+    else { word.className = "status-word stock"; text.textContent = t("state_stock"); }
+    sub.textContent = (lang === "id" ? "batas " : "limit ") + safe + "°C" + (!s.daemon_running ? " · daemon down" : "");
+
+    // Transparency for "is this real-time?": which zone produced the
+    // governing number, and how many seconds old this snapshot is.
+    var ageSec = s.updated ? Math.max(0, Math.round(Date.now() / 1000 - s.updated)) : null;
+    var zoneLabel = (lang === "id" ? "Zona" : "Zone") + ": " + (s.governing_zone || "-");
+    var ageLabel = ageSec === null ? "" : " · " + (lang === "id" ? "diperbarui " + ageSec + "d lalu" : "updated " + ageSec + "s ago");
+    document.getElementById("statusMeta").textContent = zoneLabel + ageLabel;
+
+    document.getElementById("chipsetLine").textContent = s.chipset || "-";
+
+    var badge = document.getElementById("profileBadge");
+    if (s.active_profile) {
+      badge.style.display = "inline-flex";
+      var autoTag = s.active_profile_auto ? (lang === "id" ? " (otomatis)" : " (auto)") : "";
+      document.getElementById("profileName").textContent = s.active_profile + " (" + s.effective_mode + ")" + autoTag;
+    } else { badge.style.display = "none"; }
+
+    document.getElementById("masterToggle").checked = !!s.guardian_enabled;
+
+    document.getElementById("defaultModeSelect").value = s.mode || "balanced";
+    document.getElementById("customSliderWrap").classList.toggle("show", s.mode === "custom");
+    if (!draggingSlider) {
+      document.getElementById("customSlider").value = s.custom_safe_temp;
+      document.getElementById("customSliderVal").textContent = s.custom_safe_temp;
+    }
+
+    document.getElementById("tAutoDetect").checked = !!s.auto_detect;
+    document.getElementById("tAutoDiscover").checked = !!s.auto_discover_thermal;
+    document.getElementById("tEngine").checked = !!s.disable_thermal_engine;
+    document.getElementById("tSched").checked = !!s.disable_sched_boost;
+    document.getElementById("tIostats").checked = !!s.disable_iostats;
+    document.getElementById("tDfps").checked = !!s.disable_smart_dfps;
+    document.getElementById("tGpu").checked = !!s.disable_gpu_limiter;
+    document.getElementById("tLmh").checked = !!s.disable_ppm_lmh;
+
+    var forceRelax = document.getElementById("forceRelaxBtn");
+    forceRelax.disabled = !s.guardian_enabled || s.state === "relaxed" || gov >= hard;
+    document.getElementById("forceRestoreBtn").disabled = !s.guardian_enabled || s.state === "stock";
+
+    updateDiag();
+  }
+
+  function renderEvents(arr) {
+    var full = document.getElementById("eventListFull");
+    var mini = document.getElementById("eventListMini");
+    if (!arr || !arr.length) {
+      full.innerHTML = '<div class="event-empty">' + t("event_empty") + "</div>";
+      mini.innerHTML = '<div class="event-empty">' + t("event_empty") + "</div>";
+      return;
+    }
+    var reversed = arr.slice().reverse();
+    full.innerHTML = "";
+    reversed.forEach(function (line) {
+      var div = document.createElement("div");
+      div.className = "event-item";
+      div.textContent = line;
+      full.appendChild(div);
+    });
+    mini.innerHTML = "";
+    reversed.slice(0, 3).forEach(function (line) {
+      var div = document.createElement("div");
+      div.className = "row";
+      div.textContent = line;
+      mini.appendChild(div);
+    });
+  }
+
+  function renderProfiles(arr) {
+    latestProfiles = arr || [];
+    var list = document.getElementById("profileList");
+    if (!arr || !arr.length) { list.innerHTML = '<div class="profile-empty">' + t("profile_empty") + "</div>"; return; }
+    list.innerHTML = "";
+    arr.forEach(function (p) {
+      var row = document.createElement("div");
+      row.className = "profile-item";
+      row.innerHTML = '<span class="pkg"></span><span class="mode-tag"></span><button class="rm">&times;</button>';
+      row.querySelector(".pkg").textContent = p.pkg;
+      row.querySelector(".mode-tag").textContent = p.mode;
+      row.querySelector(".rm").addEventListener("click", function () {
+        call("profile_remove " + encodeShell(p.pkg)).then(function () { pollCycle(); refreshPickerAddedState(); });
+      });
+      list.appendChild(row);
+    });
+    refreshPickerAddedState();
+  }
+  function encodeShell(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'"; }
+  function isProfiled(pkg) { return latestProfiles.some(function (p) { return p.pkg === pkg; }); }
+
+  function updateDiag() {
+    document.getElementById("diagBody").innerHTML =
+      "window.ksu terdeteksi: <b>" + (DIAG.ksuPresent ? "ya" : "TIDAK") + "</b><br>" +
+      "MODPATH: " + escapeHtml(MODPATH) + "<br>" +
+      "Round-trip terakhir: <b>" + DIAG.lastMs + "ms</b><br>" +
+      "Interval efektif: " + Math.round(nextDelay() / 1000) + "s<br>" +
+      "Catatan: " + escapeHtml(DIAG.lastNote);
+  }
+  function escapeHtml(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+
+  // apply(): one round trip - set a value AND get the refreshed payload
+  // back in the same shell call, instead of "set" then a separate "status".
+  function apply(key, val) { call("apply " + key + " " + val).then(function (out) { var d = safeJSON(out); if (d) renderAll(d); }); }
+
+  // ---------- device info (Lainnya tab, fetched on demand only) ----------
+  function loadDeviceInfo() {
+    call("device_info").then(function (out) {
+      var d = safeJSON(out);
+      if (!d) return;
+      document.getElementById("devModel").textContent = (d.manufacturer && d.manufacturer !== "?" ? d.manufacturer + " " : "") + d.model;
+      document.getElementById("devChipset").textContent = d.chipset;
+      document.getElementById("devAndroid").textContent = "Android " + d.android_release + " (SDK " + d.android_sdk + ")";
+      document.getElementById("devKernel").textContent = d.kernel + (d.arch ? " (" + d.arch + ")" : "");
+      var rootStr = d.root_solution || "-";
+      if (d.ksu_ver) rootStr += " " + d.ksu_ver;
+      document.getElementById("devRoot").textContent = rootStr;
+      document.getElementById("devModuleVer").textContent = d.module_version;
+    });
+  }
+
+  // ---------- installed-app picker (Game tab, fetched on demand only) ----------
+  var pickerApps = null;
+  function loadInstalledApps() {
+    var btn = document.getElementById("pickerLoadBtn");
+    btn.textContent = t("picker_loading");
+    btn.disabled = true;
+    call("installed_apps").then(function (out) {
+      var arr = safeJSON(out) || [];
+      arr.sort(function (a, b) {
+        if (a.known_game !== b.known_game) return a.known_game ? -1 : 1;
+        return a.pkg.localeCompare(b.pkg);
+      });
+      pickerApps = arr;
+      btn.style.display = "none";
+      document.getElementById("pickerSearch").style.display = "block";
+      document.getElementById("pickerList").style.display = "flex";
+      renderPicker("");
+    }, function () {
+      btn.textContent = t("picker_load");
+      btn.disabled = false;
+    });
+  }
+
+  function renderPicker(filterText) {
+    var list = document.getElementById("pickerList");
+    if (!pickerApps) return;
+    var f = (filterText || "").toLowerCase();
+    var shown = pickerApps.filter(function (a) { return !f || a.pkg.toLowerCase().indexOf(f) !== -1; });
+    if (!shown.length) { list.innerHTML = '<div class="picker-empty">' + t("picker_empty") + "</div>"; return; }
+    list.innerHTML = "";
+    shown.slice(0, 150).forEach(function (a) {
+      var row = document.createElement("div");
+      row.className = "app-row";
+      var avatar = document.createElement("div");
+      avatar.className = "app-avatar-fallback";
+      avatar.textContent = (a.pkg.charAt(a.pkg.lastIndexOf(".") + 1) || "?").toUpperCase();
+      var img = document.createElement("img");
+      img.className = "app-avatar";
+      img.style.display = "none";
+      img.src = "ksu://icon/" + a.pkg;
+      img.onload = function () { img.style.display = "block"; avatar.style.display = "none"; };
+      img.onerror = function () { img.remove(); };
+      var meta = document.createElement("div");
+      meta.className = "app-meta";
+      var nameRow = document.createElement("div");
+      nameRow.className = "app-name";
+      nameRow.textContent = a.pkg;
+      if (a.known_game) {
+        var badge = document.createElement("span");
+        badge.className = "app-badge";
+        badge.textContent = "GAME";
+        nameRow.appendChild(badge);
+      }
+      var pkgRow = document.createElement("div");
+      pkgRow.className = "app-pkg";
+      pkgRow.textContent = a.pkg;
+      meta.appendChild(nameRow);
+      meta.appendChild(pkgRow);
+      row.appendChild(avatar);
+      row.appendChild(img);
+      row.appendChild(meta);
+      if (isProfiled(a.pkg)) {
+        var added = document.createElement("span");
+        added.className = "app-added";
+        added.textContent = t("picker_added");
+        row.appendChild(added);
+      } else {
+        var addBtn = document.createElement("button");
+        addBtn.className = "app-add";
+        addBtn.textContent = "+";
+        addBtn.addEventListener("click", function () {
+          call("profile_set " + encodeShell(a.pkg) + " performance").then(function () {
+            pollCycle();
+            showToast((lang === "id" ? "Ditambahkan: " : "Added: ") + a.pkg);
+          });
+        });
+        row.appendChild(addBtn);
+      }
+      list.appendChild(row);
+    });
+    // try to enrich with real app labels if this manager exposes it -
+    // best effort only, package names still work fine on their own.
+    try {
+      if (window.ksu && typeof window.ksu.getPackagesInfo === "function") {
+        var pkgs = shown.slice(0, 150).map(function (a) { return a.pkg; });
+        var infoArr = JSON.parse(window.ksu.getPackagesInfo(JSON.stringify(pkgs)));
+        var rows = list.querySelectorAll(".app-row");
+        infoArr.forEach(function (info) {
+          if (!info || !info.packageName || !info.appLabel) return;
+          rows.forEach(function (row) {
+            var pkgEl = row.querySelector(".app-pkg");
+            var nameEl = row.querySelector(".app-name");
+            if (pkgEl && pkgEl.textContent === info.packageName && nameEl && nameEl.firstChild) {
+              nameEl.firstChild.textContent = info.appLabel;
+            }
+          });
+        });
+      }
+    } catch (e) { /* labels are a nice-to-have, package names remain visible either way */ }
+  }
+
+  function refreshPickerAddedState() {
+    if (pickerApps) renderPicker(document.getElementById("pickerSearch").value);
+  }
+
+  // ---------- wiring ----------
+  document.getElementById("masterToggle").addEventListener("change", function (e) { apply("GUARDIAN_ENABLED", e.target.checked ? 1 : 0); });
+
+  document.getElementById("defaultModeSelect").addEventListener("change", function (e) {
+    var m = e.target.value;
+    document.getElementById("customSliderWrap").classList.toggle("show", m === "custom");
+    apply("MODE", m);
+  });
+
+  var customSlider = document.getElementById("customSlider");
+  customSlider.addEventListener("focus", function () { draggingSlider = true; });
+  customSlider.addEventListener("input", function () { document.getElementById("customSliderVal").textContent = customSlider.value; });
+  customSlider.addEventListener("change", function () { draggingSlider = false; apply("CUSTOM_SAFE_TEMP", customSlider.value); });
+
+  function wireToggle(id, key) { document.getElementById(id).addEventListener("change", function (e) { apply(key, e.target.checked ? 1 : 0); }); }
+  wireToggle("tAutoDetect", "AUTO_DETECT");
+  wireToggle("tAutoDiscover", "AUTO_DISCOVER_THERMAL");
+  wireToggle("tEngine", "DISABLE_THERMAL_ENGINE");
+  wireToggle("tSched", "DISABLE_SCHED_BOOST");
+  wireToggle("tIostats", "DISABLE_IOSTATS");
+  wireToggle("tDfps", "DISABLE_SMART_DFPS");
+  wireToggle("tGpu", "DISABLE_GPU_LIMITER");
+  wireToggle("tLmh", "DISABLE_PPM_LMH");
+
+  document.getElementById("forceRelaxBtn").addEventListener("click", function () { call("force relax").then(function (out) { var d = safeJSON(out); if (d) renderAll(d); }); });
+  document.getElementById("forceRestoreBtn").addEventListener("click", function () { call("force restore").then(function (out) { var d = safeJSON(out); if (d) renderAll(d); }); });
+
+  document.getElementById("pollSelect").addEventListener("change", function (e) {
+    var v = e.target.value;
+    if (v === "manual") { manualMode = true; clearTimeout(pollTimer); }
+    else { manualMode = false; baseIntervalMs = parseInt(v, 10) * 1000; backoff = 1; scheduleNext(); }
+    call("set POLL_INTERVAL " + (v === "manual" ? 6 : v));
+  });
+
+  // Request #1 fix: pressing refresh now gives clear, immediate proof
+  // it did something - an icon spin plus a toast (native ksu.toast()
+  // when the manager supports it, an in-page pill otherwise), instead
+  // of silently re-rendering numbers that might not visibly change.
+  document.getElementById("refreshBtn").addEventListener("click", function () {
+    var btn = this;
+    if (btn.classList.contains("spinning")) return;
+    btn.classList.add("spinning");
+    showToast(t("toast_refreshing"));
+    pollCycle(function (ok) {
+      btn.classList.remove("spinning");
+      showToast(ok ? t("toast_refreshed") : t("toast_refresh_failed"));
+    });
+  });
+
+  document.getElementById("profileAddBtn").addEventListener("click", function () {
+    var pkg = document.getElementById("profilePkgInput").value.trim();
+    var mode = document.getElementById("profileModeSelect").value;
+    if (!pkg) return;
+    call("profile_set " + encodeShell(pkg) + " " + mode).then(function () {
+      document.getElementById("profilePkgInput").value = "";
+      pollCycle();
+      refreshPickerAddedState();
+    });
+  });
+
+  document.getElementById("pickerLoadBtn").addEventListener("click", loadInstalledApps);
+  document.getElementById("pickerSearch").addEventListener("input", function (e) { renderPicker(e.target.value); });
+
+  document.getElementById("diagTestBtn").addEventListener("click", function () {
+    document.getElementById("diagBody").textContent = "menguji...";
+    call("poll").then(function (out) { var d = safeJSON(out); if (d) renderAll(d); else updateDiag(); });
+  });
+  document.getElementById("diagDaemonBtn").addEventListener("click", function () {
+    var pre = document.getElementById("diagRaw");
+    pre.style.display = "block";
+    pre.textContent = "memuat...";
+    call("debug").then(function (out) { pre.textContent = out || "(tidak ada respons)"; });
+  });
+
+  document.getElementById("themeBtn").addEventListener("click", function () {
+    var cur = document.documentElement.getAttribute("data-theme");
+    var next = cur === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    call("set THEME " + next);
+  });
+  document.getElementById("langBtn").addEventListener("click", function () {
+    lang = lang === "id" ? "en" : "id";
+    applyLang();
+    call("set LANG_UI " + lang);
+  });
+
+  // ---------- init ----------
+  applyLang();
+  updateDiag();
+  call("poll").then(function (out) {
+    var data = safeJSON(out);
+    if (data && data.status) {
+      if (data.status.theme) document.documentElement.setAttribute("data-theme", data.status.theme);
+      if (data.status.lang) lang = data.status.lang;
+      applyLang();
+      renderAll(data);
+      var pi = data.status.poll_interval;
+      if (pi) { baseIntervalMs = pi * 1000; document.getElementById("pollSelect").value = String(pi); }
+    }
+    scheduleNext();
+  });
+})();
+</script>
+</body>
+</html>

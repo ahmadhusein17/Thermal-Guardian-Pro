@@ -1,0 +1,7 @@
+id=thermal_guardian_pro
+name=Thermal Guardian Pro
+version=v6.0
+versionCode=14
+author=Husein
+description=Modul manajemen thermal adaptif untuk perangkat rooted. Memantau suhu SoC secara real-time dan hanya melonggarkan throttling selagi suhu benar-benar aman, lalu mengembalikan proteksi stok otomatis saat mendekati batas - bukan mematikan proteksi panas secara permanen. Mode kerja mengikuti profil per-aplikasi (otomatis aktif saat game dibuka) dilengkapi deteksi heuristik untuk aplikasi yang belum diprofilkan. Cakupan daemon thermal mencakup berbagai chipset (Qualcomm, MediaTek, Samsung Exynos, Unisoc) dengan auto-discovery untuk perangkat di luar daftar bawaan. Dilengkapi WebUI 3 tab (Status/Game/Lainnya) berisi info perangkat, riwayat suhu, dan kontrol manual override. Batas keras suhu tidak dapat dimatikan dari mode apa pun, menjaga keamanan perangkat tetap menjadi prioritas utama.
+webui=webroot/index.html

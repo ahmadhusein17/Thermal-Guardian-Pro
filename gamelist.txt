@@ -1,0 +1,60 @@
+# Thermal Guardian Pro - daftar bantu "game dikenal"
+# Satu package name per baris. Ini HANYA petunjuk untuk menyortir dan
+# memberi badge "Game" di tab Game pada WebUI - menambahkan profil untuk
+# paket apa pun, dikenal atau tidak, tetap selalu berfungsi lewat input
+# manual. Daftar ini sengaja ringkas, bukan daftar lengkap semua game.
+com.tencent.ig
+com.pubg.imobile
+com.dts.freefireth
+com.dts.freefiremax
+com.activision.callofduty.shooter
+com.garena.game.codm
+com.mobile.legends
+com.moonton.mobilelegends
+com.miHoYo.GenshinImpact
+com.miHoYo.Yuanshen
+com.HoYoverse.hkrpgoversea
+com.miHoYo.bh3
+com.miHoYo.bh3global
+com.tencent.tmgp.sgame
+com.riotgames.league.wildrift
+com.supercell.clashofclans
+com.supercell.clashroyale
+com.supercell.brawlstars
+com.gameloft.android.ANMP.GloftA9HM
+com.ea.gp.fifamobile
+com.efootball.pes.mobile
+com.dreamgames.royalmatch
+com.mojang.minecraftpe
+com.roblox.client
+innersloth.amongus
+com.epicgames.fortnite
+com.blizzard.diabloimmortal
+com.kurogame.pgr.gl
+com.YoStarJP.Arknights
+com.RoamingStar.BlueArchive
+com.netease.dbd
+com.netease.idv
+com.netease.dwrg
+com.gameloft.android.ANMP.GloftA8HM
+com.miniclip.eightballpool
+com.kiloo.subwaysurf
+com.imangi.templerun2
+com.king.candycrushsaga
+com.elex.gg.lastwarsurvival
+com.fun.lastwar.gp
+com.kingsgroup.sos
+com.axlebolt.standoff2
+com.aim.criticalops
+com.gameloft.android.ANMP.GloftM5HM
+com.mgt.shadowfight3
+com.digitalchocolate.shadowfight4
+com.netmarble.mherosgb
+com.com2us.smon.normal.freefull.google.kr.androidgame.smon
+com.plarium.raidlegends
+com.lilithgame.hgame.gp
+com.dreamland.afkarena
+com.tencent.tmgp.pubgmhd
+com.netease.newkabuggmi
+com.riotgames.league.teamfighttactics
+com.garena.game.kgvn

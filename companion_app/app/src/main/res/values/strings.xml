@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">Thermal Guardian Pro - Companion</string>
+    <string name="a11y_service_description">Reads the package name of the app currently in the foreground, so Thermal Guardian Pro can detect games more accurately and in real time than the dumpsys-based fallback. Does not read screen content, text, or any personal data.</string>
+    <string name="main_instructions">1. Tap the button below to open Accessibility Settings.\n2. Find \"Thermal Guardian Pro - Companion\" and turn it on.\n3. Done - the Thermal Guardian Pro module will automatically use this data once it is available.</string>
+    <string name="open_accessibility_settings">Open Accessibility Settings</string>
+</resources>
