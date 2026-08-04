@@ -89,3 +89,15 @@ Melonggarkan limit *thermal* berarti mengizinkan perangkat beroperasi pada suhu 
 Batas keras (*Hard Limits*) pada modul ini berfungsi sebagai jaring pengaman terakhir, bukan jaminan mutlak perangkat terbebas dari risiko keausan *hardware*. **Gunakan dengan bijak**, dan turunkan mode apabila perangkat mulai terasa tidak nyaman saat digenggam.
 
 *Do With Your Own Risk (DWYOR).*
+
+
+## ☕ Asupan Kafein untuk Dev (Support the Project)
+
+Modul ini 100% gratis, *open-source*, dan bebas dipakai. Tapi jujur aja, mantengin *logcat* semalaman, ngetes *thermal zone*, sampai bolak-balik nge-*flash* nyari konfigurasi yang pas itu butuh bensin yang nggak sedikit (baca: kopi dan cemilan). 
+
+Kalau **Thermal Guardian Pro** ngebantu HP kamu jadi lebih adem pas *push rank* atau bikin main game tanpa *frame drop*, boleh dong *support* dev-nya dengan traktir kopi. Seikhlasnya aja, tapi sangat berarti buat mencegah dev-nya kena *burnout* dan nambah semangat buat riset *update* selanjutnya! 🚀
+
+- [**💸 Sawer Ngab (Saweria)**](https://saweria.co/ahmadhusein17)
+- [**☕ Traktir Kopi (Trakteer)**](https://trakteer.id/ahmadhusein17)
+- [**🌐 PayPal**](https://paypal.me/ahmadhusein17)
+- 
